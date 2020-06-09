@@ -1,0 +1,68 @@
+######### Script for outputing regulated RNA seq files from .csv files to .gff files that can be visualized in for example IGV###############
+
+######Dependencies#############
+#old#source("http://bioconductor.org/biocLite.R")
+#old#biocLite("DESeq2")
+BiocManager::install("DESeq2")
+
+library(stringr)
+library(gdata)
+
+library(readr)
+
+
+
+#########Input file###########
+                    ######add your file name##########
+counts <- read.delim("/.csv", header=TRUE, sep="\t", skip = 2)
+
+############# Parsing Attribute field seperated by ";" and with uneven column nummbers ##################
+three <- str_split_fixed(counts$Attributes,";",7)
+gnames <- gsub("Name=","",three[,3])
+#### Problem with parsing ID from Attributes becouse of uneven nr of enterys in array, not solved yet######
+#NMBnames <- if(three[,5] == '') { gsub("locus_tag=","",three[,5])}else{gsub("locus_tag=","",three[,6])}
+head(counts)
+View(counts)
+############ Filter out and consolidating data points ###########
+working = cbind(counts[52],counts[2],counts[3],counts[4],counts[5],counts[6],counts[7],counts[8],counts[9],counts[28],gnames,counts[1],counts[48],counts[47])
+############ Removing data under 95% adjusted p-values probability ###########
+View(working)
+workingHalf <- working[(!working[1]>0.05),]
+head(workingHalf[13])
+
+
+working1 <- workingHalf[!(workingHalf[13]<1 & workingHalf[13]>-1),]
+head(working1)
+############ Spliting antisense ans sense ##############
+workingAS2<-working1[(!working1[12]=="sense"),]
+workingS2<-working1[(!working1[12]=="anti-sense"),]
+
+########## Reversing strand orientation for antisense messured side of Deseq #########################
+workingAS2$Strand <- as.character(workingAS2$Strand)
+workingS2$Strand <- as.character(workingS2$Strand)
+workingAS2$Strand[workingAS2$Strand == "+"] <- "pos"
+workingAS2$Strand[workingAS2$Strand == "-"] <- "neg"
+
+workingAS2$Strand[workingAS2$Strand == "pos"] <- "-"
+workingAS2$Strand[workingAS2$Strand == "neg"] <- "+"
+
+############ Merging data to a comment field ###############
+
+comfS <- paste(";Name=", unlist(workingS2[11]), ";Orientation=", unlist(workingS2[12]), ";AdjP-value=", unlist(workingS2[1]), ";log2FoldChange=", unlist(workingS2[13]), ";baseMeanExpression=", unlist(workingS2[14]), sep = '')
+
+comfAS <- paste(";Name=AntiS_", unlist(workingAS2[11]), ";Orientation=", unlist(workingAS2[12]), ";AdjP-value=", unlist(workingAS2[1]), ";log2FoldChange=", unlist(workingAS2[13]), ";baseMeanExpression=", unlist(workingAS2[14]), sep = '')
+
+stringsAsFactors=FALSE
+
+######## Combining into result arrays ################
+resultsS = cbind(workingS2[2],workingS2[3],workingS2[4],workingS2[5],workingS2[6],workingS2[7],workingS2[8],workingS2[9],comfS)
+resultsAS = cbind(workingAS2[2],workingAS2[3],workingAS2[4],workingAS2[5],workingAS2[6],workingAS2[7],workingAS2[8],workingAS2[9],comfAS)
+
+resultsS <- na.omit(resultsS)
+resultsAS <- na.omit(resultsAS)
+
+########### Write to file #############
+write.table(resultsS, "output_sense_genes_minFC2.gff.gff", sep="\t", row.names = F, quote = F, col.names = F)
+write.table(resultsAS, "output_antisense_genes_minFC2.gff", sep="\t", row.names = F, quote = F, col.names = F)
+
+close(fileConn)
